@@ -1,57 +1,48 @@
+# streamlit_app.py
 import streamlit as st
 import joblib
 import requests
-from sklearn.feature_extraction.text import TfidfVectorizer
 
+# Load model and vectorizer
+try:
+    model = joblib.load('model/news_classification_model.pkl')
+    vectorizer = joblib.load('model/tfidf_vectorizer.pkl')
+except:
+    st.error("❌ Model files not found. Please run train_model.py first.")
+    st.stop()
 
-model = joblib.load('model/news_classification_model.pkl')
-vectorizer = joblib.load('model/tfidf_vectorizer.pkl')
+st.title('📰 News Checker: Real or Fake?')
 
+# Input box
+news_text = st.text_area('Paste your news headline or short article:', '')
 
-st.title('News Checker: Real or Fake?')
+# Fetch related news
+def fetch_related_news(query):
+    api_key = 'ea09ff9b3308472cb3eb810de2f429f8'  # Replace with your own key
+    url = f"https://newsapi.org/v2/everything?q={query}&apiKey={api_key}"
+    response = requests.get(url)
+    return response.json().get('articles', []) if response.status_code == 200 else []
 
-
-news_text = st.text_area('Paste your news article here:', '')
-
-def fetch_news_by_topic(query, api_url="https://newsapi.org/v2/everything"):
-    api_key = 'ea09ff9b3308472cb3eb810de2f429f8'  
-    response = requests.get(f"{api_url}?q={query}&apiKey={api_key}")
-    if response.status_code == 200:
-        news_data = response.json()
-        return news_data.get('articles', [])
-    else:
-        print("Failed to fetch news")
-        return []
-
-
+# On click
 if st.button('Check News'):
-    if news_text:
-        
-        news_vector = vectorizer.transform([news_text])
+    if news_text.strip():
+        transformed = vectorizer.transform([news_text])
+        prediction = model.predict(transformed)
 
-        
-        prediction = model.predict(news_vector)
-
-     
-        if prediction == 0:  
-            st.write('✅ The news is **REAL**')
+        if prediction[0] == 0:
+            st.success("✅ The news is **REAL**.")
         else:
-            st.write('❌ The news is **FAKE**')
-            
-         
-            st.write("Here are some other news articles related to the topic of your headline:")
+            st.error("❌ The news is **FAKE**.")
 
-           
-            recommended_news = fetch_news_by_topic(news_text)
-            
-            if recommended_news:
-                for article in recommended_news[:3]:  
+            st.markdown("---")
+            st.markdown("#### 🔎 Related News Articles")
+            related = fetch_related_news(news_text)
+            if related:
+                for article in related[:3]:
                     st.write(f"**{article['title']}**")
-                    st.write(f"Source: {article['source']['name']}")
-                    st.write(f"Link: [Read More]({article['url']})")
-                    st.write("\n")
+                    st.write(f"🗞️ Source: {article['source']['name']}")
+                    st.write(f"[Read More]({article['url']})")
             else:
-                st.write("Sorry, we couldn't find related news.")
-            
+                st.info("No related articles found.")
     else:
-        st.write("Please enter a news article.")
+        st.warning("Please enter news text to analyze.")
